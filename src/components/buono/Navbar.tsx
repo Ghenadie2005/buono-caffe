@@ -1,3 +1,5 @@
+import { useAuth } from "@/lib/auth-context";
+
 // Buono Caffè — fixed top navigation
 // TODO: replace text logo with brand SVG when available
 export function Navbar({
@@ -7,6 +9,8 @@ export function Navbar({
   onSignIn: () => void;
   onJoin: () => void;
 }) {
+  const { user, profile, signOut } = useAuth();
+
   return (
     <nav className="fixed top-0 inset-x-0 z-50 h-20 border-b border-border bg-background/80 backdrop-blur-md">
       <div className="max-w-7xl mx-auto h-full px-6 flex items-center justify-between gap-4">
@@ -24,12 +28,27 @@ export function Navbar({
         </div>
 
         <div className="flex items-center gap-2 sm:gap-4 shrink-0">
-          <button
-            onClick={onSignIn}
-            className="text-sm font-medium px-3 sm:px-5 py-2 cursor-pointer hover:text-primary transition-colors"
-          >
-            Sign In
-          </button>
+          {user ? (
+            <>
+              <span className="hidden sm:inline text-sm text-foreground/70">
+                {profile?.full_name ?? user.email}
+                {profile ? ` (${profile.role})` : ""}
+              </span>
+              <button
+                onClick={() => signOut()}
+                className="text-sm font-medium px-3 sm:px-5 py-2 cursor-pointer hover:text-primary transition-colors"
+              >
+                Sign Out
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={onSignIn}
+              className="text-sm font-medium px-3 sm:px-5 py-2 cursor-pointer hover:text-primary transition-colors"
+            >
+              Sign In
+            </button>
+          )}
           <button
             onClick={onJoin}
             className="text-sm font-medium px-4 sm:px-5 py-2.5 bg-primary text-primary-foreground rounded-full cursor-pointer hover:brightness-110 transition-all"
