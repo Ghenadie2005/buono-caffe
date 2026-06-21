@@ -16,6 +16,13 @@ type Profile = {
   role: UserRole;
 };
 
+class MissingProfileError extends Error {
+  constructor() {
+    super("Your password is correct, but no staff profile is linked to this account yet.");
+    this.name = "MissingProfileError";
+  }
+}
+
 type AuthContextValue = {
   user: User | null;
   profile: Profile | null;
@@ -31,7 +38,7 @@ async function fetchProfile(userId: string): Promise<Profile | null> {
     .from("profiles")
     .select("full_name, role")
     .eq("id", userId)
-    .single();
+    .maybeSingle();
 
   if (error) {
     console.error(error);
@@ -78,9 +85,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (error) throw new Error(error.message);
 
       const signedInProfile = await fetchProfile(data.user.id);
-      if (!signedInProfile || !allowedRoles.includes(signedInProfile.role)) {
+      if (!signedInProfile) {
         await supabase.auth.signOut();
-        throw new Error("This account doesn't have access to this portal.");
+        throw new MissingProfileError();
+      }
+
+      if (!allowedRoles.includes(signedInProfile.role)) {
+        await supabase.auth.signOut();
+        const portalName = allowedRoles.includes("super_admin") ? "Admin" : "Employee";
+        throw new Error(`This account is set up as ${signedInProfile.role}, so it can't access the ${portalName} portal.`);
       }
     },
     [],
