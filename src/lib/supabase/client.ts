@@ -5,7 +5,7 @@ function readEnv(name: string): string | undefined {
   return import.meta.env[name] ?? (typeof process !== "undefined" ? process.env?.[name] : undefined);
 }
 
-function getSupabaseConfig() {
+function readSupabaseConfig() {
   const url = readEnv("VITE_SUPABASE_URL") ?? readEnv("SUPABASE_URL");
   const publishableKey =
     readEnv("VITE_SUPABASE_PUBLISHABLE_KEY") ??
@@ -13,13 +13,23 @@ function getSupabaseConfig() {
     readEnv("SUPABASE_PUBLISHABLE_KEY") ??
     readEnv("SUPABASE_ANON_KEY");
 
-  if (!url || !publishableKey) {
+  return url && publishableKey ? { url, publishableKey } : null;
+}
+
+export function isSupabaseConfigured() {
+  return readSupabaseConfig() !== null;
+}
+
+function getSupabaseConfig() {
+  const config = readSupabaseConfig();
+
+  if (!config) {
     throw new Error(
       "Missing VITE_SUPABASE_URL or VITE_SUPABASE_PUBLISHABLE_KEY — set them in .env (see .env.example).",
     );
   }
 
-  return { url, publishableKey };
+  return config;
 }
 
 let cachedClient: SupabaseClient | undefined;
