@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import type { User } from "@supabase/supabase-js";
-import { supabase } from "./supabase/client";
+import { isSupabaseConfigured, supabase } from "./supabase/client";
 
 export type UserRole = "customer" | "employee" | "manager" | "franchisee" | "super_admin";
 
@@ -34,6 +34,8 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 async function fetchProfile(userId: string): Promise<Profile | null> {
+  if (!isSupabaseConfigured()) return null;
+
   const { data, error } = await supabase
     .from("profiles")
     .select("full_name, role")
@@ -54,6 +56,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true;
+
+    if (!isSupabaseConfigured()) {
+      setUser(null);
+      setProfile(null);
+      setLoading(false);
+      return () => {
+        active = false;
+      };
+    }
 
     async function applySession(sessionUser: User | null) {
       if (!active) return;
@@ -81,6 +92,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = useCallback(
     async (email: string, password: string, allowedRoles: UserRole[]) => {
+      if (!isSupabaseConfigured()) {
+        throw new Error("Authentication is unavailable because the app is missing its public database configuration.");
+      }
+
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw new Error(error.message);
 
@@ -100,6 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const signOut = useCallback(async () => {
+    if (!isSupabaseConfigured()) return;
     await supabase.auth.signOut();
   }, []);
 
