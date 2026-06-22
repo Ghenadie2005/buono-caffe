@@ -1,25 +1,29 @@
-## Goal
+## Why every page shows "This page didn't load"
 
-Connect the app to your existing Supabase project at `https://kbzolbcfhgxgabdubzvy.supabase.co` without scaffolding a new client or touching schema. The `supabase` browser client, `AuthProvider`, and sign-in flow are already in place — they just need env vars.
+The Worker SSR logs (previously hidden by h3) say:
 
-## Steps
+> `Error: Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY`
 
-1. **Create `.env`** at the project root with:
-   - `VITE_SUPABASE_URL=https://kbzolbcfhgxgabdubzvy.supabase.co`
-   - `VITE_SUPABASE_ANON_KEY=sb_publishable_9FJrJXlpn4r68VGCLs14jA_FYQyqZKz`
+`src/lib/supabase/client.ts` reads `import.meta.env.VITE_SUPABASE_ANON_KEY` and throws if it's missing. That throw happens at module import, before any route renders, so SSR returns 500 for every URL.
 
-2. **Create `.env.example`** with the same keys but empty values, so future contributors know what's required.
+The local `.env` does define `VITE_SUPABASE_ANON_KEY`, which is why dev sort-of works. But the deployed/preview build environment doesn't — Lovable Cloud injects the key under the name **`VITE_SUPABASE_PUBLISHABLE_KEY`** (with server-only `SUPABASE_PUBLISHABLE_KEY` for server code). `import.meta.env.VITE_SUPABASE_ANON_KEY` is inlined as `undefined` at build time → the throw fires on every SSR render.
 
-3. **Ensure `.env` is gitignored** (check `.gitignore`, add if missing) so the key isn't committed when you push to GitHub.
+## Plan
 
-4. **Restart the dev server** so Vite picks up the new env vars, then verify in the browser console that `supabase.auth.getSession()` works and the Sign In modal can authenticate against your existing `profiles` table.
+1. **Update `src/lib/supabase/client.ts`** to use the canonical Lovable Cloud names, with fallbacks for back-compat:
+   - URL: `import.meta.env.VITE_SUPABASE_URL` → fallback `process.env.SUPABASE_URL`
+   - Key: `import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY` → `import.meta.env.VITE_SUPABASE_ANON_KEY` → `process.env.SUPABASE_PUBLISHABLE_KEY` → `process.env.SUPABASE_ANON_KEY`
+   - Update the error message to reference the new names.
+   - Keep the SSR-safety branch (use plain `createClient` with no storage when `window` is undefined) so `@supabase/ssr`'s browser client doesn't touch `localStorage` during SSR.
 
-## What I will NOT touch
+2. **Update `.env.example`** to document `VITE_SUPABASE_PUBLISHABLE_KEY` (keep a note that `VITE_SUPABASE_ANON_KEY` is still accepted for compatibility).
 
-- `src/lib/supabase/client.ts` — already correct
-- `src/lib/auth-context.tsx` — already matches your `profiles` schema
-- No new migrations, no Lovable Cloud, no new Supabase clients
+3. **No other files change.** Auth, routing, and the staff profile you just fixed are untouched. After deploy, the preview should render again.
 
-## Note on the key format
+## Verification
 
-`sb_publishable_...` is the new-format publishable key. It works fine with the browser client (`@supabase/ssr`'s `createBrowserClient`) for auth and RLS-protected Data API reads. If any server-side code later needs PostgREST with strict JWT parsing, we'd revisit — but nothing in the current frontend-only codebase needs that.
+- After the edit, refresh the preview at `/` — it should render the homepage.
+- Re-check worker logs: the `Missing VITE_SUPABASE_...` error should be gone.
+- Sign in on the Admin tab — should succeed with the staff profile already linked.
+
+If the preview still 500s after this, the next step is to also `console.log` which env source resolved (URL/key) inside `client.ts` so we can see exactly which name the deploy environment is using.
